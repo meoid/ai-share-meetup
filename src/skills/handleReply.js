@@ -4,36 +4,70 @@ const store = require('../store');
 const feishu = require('../feishu/client');
 
 async function run(userId, userName, text) {
-  console.log(`[handleReply] 收到 ${userName} 的回复: ${text}`);
+  console.log(`[chat] ${userName}: ${text}`);
+
+  const typingId = await feishu.sendTypingCard(userId);
 
   try {
+    store.appendHistory(userId, 'user', text);
+
+    const existing = store.getMemberReply(userId);
+    const weekSummary = store.getWeekSummary();
+
+    const contextInfo = [];
+    if (existing) {
+      contextInfo.push(`该用户当前记录：${existing.willing === 'yes' ? '参加' : '不参加'}${existing.topic ? `，主题「${existing.topic}」` : ''}`);
+    }
+    contextInfo.push(`本周已收集的回复：\n${weekSummary}`);
+
+    const systemContent = SYSTEM_PROMPT + '\n\n## 当前状态\n' + contextInfo.join('\n');
+
+    const history = store.getHistory(userId);
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: text },
+      { role: 'system', content: systemContent },
+      ...history.slice(-20),
     ];
 
     const result = await llm.chatWithTools(messages, SKILLS);
+    let reply;
 
     if (result.type === 'tool_calls') {
       for (const call of result.toolCalls) {
-        if (call.name === 'parse_sharing_reply') {
+        if (call.name === 'record_response') {
           const { willing, topic, notes } = call.args;
           store.setReply(userId, userName, willing, topic || '', notes || '');
-          console.log(`[handleReply] 已记录: ${userName} - 意愿=${willing}, 主题=${topic || '无'}`);
-
-          const reply = willing === 'yes'
-            ? `好的，已记录！${topic ? `你的报告主题是「${topic}」，` : ''}随时可以修改哦 😊`
-            : '好的，已记录你不参加本周的分享会。如果改变主意随时告诉我～';
-          await feishu.sendTextMessage(userId, reply);
-          return;
+          console.log(`[chat] 记录: ${userName} → ${willing}${topic ? `，主题「${topic}」` : ''}`);
         }
       }
+
+      const followUp = await llm.chat([
+        { role: 'system', content: systemContent },
+        ...history.slice(-20),
+        { role: 'assistant', content: result.content || '', tool_calls: result.toolCalls.map(c => ({ id: '1', type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } })) },
+        { role: 'tool', tool_call_id: '1', content: '已记录' },
+      ]);
+      reply = followUp.content || '好的，已记录！';
+    } else {
+      reply = result.content || '嗯，我在听～';
     }
 
-    await feishu.sendTextMessage(userId, '不好意思，我没有理解你的意思。请告诉我你是否参加本周的分享会，以及你的报告主题 😊');
+    store.appendHistory(userId, 'assistant', reply);
+    console.log(`[chat] 回复: ${reply}`);
+
+    if (typingId) {
+      await feishu.updateCardToText(typingId, reply);
+    } else {
+      await feishu.sendTextMessage(userId, reply);
+    }
+
   } catch (e) {
-    console.error(`[handleReply] LLM 解析失败:`, e.message);
-    await feishu.sendTextMessage(userId, '处理你的回复时遇到了问题，请稍后再试或联系管理员。');
+    console.error(`[chat] LLM 错误:`, e.message);
+    const errMsg = '抱歉，我暂时出了点问题，请稍后再试 🙏';
+    if (typingId) {
+      await feishu.updateCardToText(typingId, errMsg);
+    } else {
+      await feishu.sendTextMessage(userId, errMsg);
+    }
   }
 }
 

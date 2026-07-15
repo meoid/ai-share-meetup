@@ -1,5 +1,4 @@
 const feishu = require('../feishu/client');
-const { buildCollectCard } = require('../feishu/cards');
 const store = require('../store');
 const config = require('../config');
 
@@ -18,12 +17,13 @@ async function run() {
   const members = await feishu.getChatMembers(config.targetChatId);
   console.log(`[collect] 群成员 ${members.length} 人`);
 
-  const card = buildCollectCard(getWeekLabel());
-
   for (const member of members) {
     if (member.openId === config.adminOpenId) continue;
     try {
-      await feishu.sendCardMessage(member.openId, card);
+      store.clearHistory(member.openId);
+      await feishu.sendTextMessage(member.openId,
+        `嗨！本周四晚上有 AI 分享会 📅\n\n你参加吗？如果参加的话，打算分享什么主题？\n\n随时回复我就行～`
+      );
       console.log(`[collect] 已发送给 ${member.name}`);
     } catch (e) {
       console.error(`[collect] 发送给 ${member.name} 失败:`, e.message);

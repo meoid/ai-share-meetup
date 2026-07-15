@@ -4,8 +4,9 @@ const config = require('./config');
 
 class Store {
   constructor() {
-    this.file = path.join(config.dataDir, 'replies.json');
+    this.file = path.join(config.dataDir, 'data.json');
     this.data = this._load();
+    this.MAX_HISTORY = 20;
   }
 
   _load() {
@@ -33,18 +34,19 @@ class Store {
 
   _ensureWeek() {
     const key = this._weekKey();
-    if (!this.data[key]) {
-      this.data[key] = {};
-    }
+    if (!this.data.weeks) this.data.weeks = {};
+    if (!this.data.weeks[key]) this.data.weeks[key] = {};
     return key;
   }
 
+  // === 意愿记录 ===
+
   setReply(userId, userName, willing, topic, notes) {
     const week = this._ensureWeek();
-    const existing = this.data[week][userId];
+    const existing = this.data.weeks[week][userId];
     const now = new Date().toISOString();
 
-    this.data[week][userId] = {
+    this.data.weeks[week][userId] = {
       userId,
       userName,
       willing,
@@ -58,22 +60,56 @@ class Store {
 
   getReplies() {
     const week = this._weekKey();
-    return this.data[week] || {};
+    return (this.data.weeks || {})[week] || {};
   }
 
   getMemberReply(userId) {
     const week = this._weekKey();
-    return (this.data[week] || {})[userId] || null;
+    return ((this.data.weeks || {})[week] || {})[userId] || null;
   }
 
   resetWeek() {
     const week = this._ensureWeek();
-    this.data[week] = {};
+    this.data.weeks[week] = {};
     this._save();
   }
 
-  getAllWeekData() {
-    return this.data;
+  // === 对话历史 ===
+
+  getHistory(userId) {
+    if (!this.data.history) this.data.history = {};
+    return this.data.history[userId] || [];
+  }
+
+  appendHistory(userId, role, content) {
+    if (!this.data.history) this.data.history = {};
+    if (!this.data.history[userId]) this.data.history[userId] = [];
+
+    this.data.history[userId].push({ role, content });
+
+    if (this.data.history[userId].length > this.MAX_HISTORY * 2) {
+      this.data.history[userId] = this.data.history[userId].slice(-this.MAX_HISTORY * 2);
+    }
+    this._save();
+  }
+
+  clearHistory(userId) {
+    if (this.data.history) {
+      delete this.data.history[userId];
+      this._save();
+    }
+  }
+
+  // === 查询辅助 ===
+
+  getWeekSummary() {
+    const replies = this.getReplies();
+    const lines = [];
+    for (const r of Object.values(replies)) {
+      const status = r.willing === 'yes' ? '参加' : '不参加';
+      lines.push(`${r.userName}: ${status}${r.topic ? `，主题「${r.topic}」` : ''}`);
+    }
+    return lines.length > 0 ? lines.join('\n') : '暂无回复';
   }
 }
 

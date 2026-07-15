@@ -12,10 +12,13 @@ async function getChatMembers(chatId) {
   let pageToken = '';
 
   do {
-    const params = { chat_id: chatId, page_size: 100 };
+    const params = { page_size: 100 };
     if (pageToken) params.page_token = pageToken;
 
-    const resp = await client.im.chatMembers.get({ params });
+    const resp = await client.im.chatMembers.get({
+      path: { chat_id: chatId },
+      params,
+    });
     if (resp.code !== 0) {
       throw new Error(`获取群成员失败: ${resp.msg}`);
     }
@@ -76,6 +79,35 @@ async function sendChatMessage(chatId, text) {
   return resp.data;
 }
 
+const TYPING_CARD = {
+  config: { wide_screen_mode: true },
+  elements: [{ tag: 'markdown', content: '💭 思考中...' }],
+};
+
+async function sendTypingCard(openId) {
+  const resp = await client.im.message.create({
+    params: { receive_id_type: 'open_id' },
+    data: {
+      receive_id: openId,
+      msg_type: 'interactive',
+      content: JSON.stringify(TYPING_CARD),
+    },
+  });
+  if (resp.code !== 0) return null;
+  return resp.data.message_id;
+}
+
+async function updateCardToText(messageId, text) {
+  const card = {
+    config: { wide_screen_mode: true },
+    elements: [{ tag: 'markdown', content: text }],
+  };
+  await client.im.message.patch({
+    path: { message_id: messageId },
+    data: { content: JSON.stringify(card) },
+  });
+}
+
 async function getUserName(openId) {
   try {
     const resp = await client.contact.user.get({
@@ -97,5 +129,7 @@ module.exports = {
   sendTextMessage,
   sendCardMessage,
   sendChatMessage,
+  sendTypingCard,
+  updateCardToText,
   getUserName,
 };
