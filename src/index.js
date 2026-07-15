@@ -2,7 +2,7 @@ const lark = require('@larksuiteoapi/node-sdk');
 const config = require('./config');
 const scheduler = require('./scheduler');
 const handleReply = require('./skills/handleReply');
-const { getUserName } = require('./feishu/client');
+const { getUserName, preloadMembers } = require('./feishu/client');
 
 const processedMessages = new Set();
 
@@ -23,7 +23,7 @@ const eventDispatcher = new lark.EventDispatcher({}).register({
       const chatType = data.message.chat_type;
 
       if (chatType === 'p2p') {
-        const userName = await getUserName(senderId);
+        const userName = getUserName(senderId);
         await handleReply.run(senderId, userName, text);
       }
     } catch (e) {
@@ -41,6 +41,7 @@ async function main() {
   console.log('🤖 AI 分享会助手启动中...');
   console.log(`   LLM: ${config.llm.model} @ ${config.llm.baseUrl}`);
 
+  await preloadMembers();
   scheduler.start();
 
   await wsClient.start({ eventDispatcher });

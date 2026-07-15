@@ -7,6 +7,9 @@ const client = new lark.Client({
   appType: lark.AppType.SelfBuild,
 });
 
+// 缓存群成员 openId → name 的映射
+const memberCache = new Map();
+
 async function getChatMembers(chatId) {
   const members = [];
   let pageToken = '';
@@ -27,11 +30,22 @@ async function getChatMembers(chatId) {
         openId: m.member_id,
         name: m.name,
       });
+      memberCache.set(m.member_id, m.name);
     }
     pageToken = resp.data.page_token || '';
   } while (pageToken);
 
   return members;
+}
+
+// 启动时预加载群成员名字
+async function preloadMembers() {
+  try {
+    await getChatMembers(config.targetChatId);
+    console.log(`[preload] 已缓存 ${memberCache.size} 位群成员`);
+  } catch (e) {
+    console.error(`[preload] 加载群成员失败:`, e.message);
+  }
 }
 
 async function sendTextMessage(openId, text) {
@@ -108,25 +122,14 @@ async function updateCardToText(messageId, text) {
   });
 }
 
-async function getUserName(openId) {
-  try {
-    const resp = await client.contact.user.get({
-      path: { user_id: openId },
-      params: { user_id_type: 'open_id' },
-    });
-    if (resp.code === 0) {
-      return resp.data.user.name;
-    }
-    console.error(`[getUserName] API 返回: code=${resp.code}, msg=${resp.msg}`);
-  } catch (e) {
-    console.error(`[getUserName] 异常:`, e.message);
-  }
-  return '未知用户';
+function getUserName(openId) {
+  return memberCache.get(openId) || '未知用户';
 }
 
 module.exports = {
   client,
   getChatMembers,
+  preloadMembers,
   sendTextMessage,
   sendCardMessage,
   sendChatMessage,
