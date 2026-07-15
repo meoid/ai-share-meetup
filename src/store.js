@@ -111,6 +111,17 @@ class Store {
     }
     return lines.length > 0 ? lines.join('\n') : '暂无回复';
   }
+
+  // === 多维表格持久化 ===
+
+  getBitableInfo() {
+    return this.data.bitable || null;
+  }
+
+  setBitableInfo(appToken, tableId, url) {
+    this.data.bitable = { appToken, tableId, url };
+    this._save();
+  }
 }
 
 module.exports = new Store();
