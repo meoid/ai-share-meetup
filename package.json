@@ -1,0 +1,16 @@
+{
+  "name": "feishu-sharing-assistant",
+  "version": "1.0.0",
+  "description": "AI 分享会飞书助手 - 自动收集意愿、汇总多维表格、定时提醒",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node src/test.js"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.30.0",
+    "dotenv": "^16.4.0",
+    "node-cron": "^3.0.3"
+  }
+}
