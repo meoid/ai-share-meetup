@@ -117,8 +117,9 @@ async function getUserName(openId) {
     if (resp.code === 0) {
       return resp.data.user.name;
     }
+    console.error(`[getUserName] API 返回: code=${resp.code}, msg=${resp.msg}`);
   } catch (e) {
-    // ignore
+    console.error(`[getUserName] 异常:`, e.message);
   }
   return '未知用户';
 }
